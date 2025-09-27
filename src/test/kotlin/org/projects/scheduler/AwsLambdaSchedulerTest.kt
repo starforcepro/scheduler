@@ -1,97 +1,187 @@
 package org.projects.scheduler
 
+import io.mockk.impl.annotations.MockK
+import io.mockk.junit5.MockKExtension
+import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import software.amazon.awssdk.services.lambda.model.PackageType
-import software.amazon.awssdk.services.lambda.model.Runtime
+import org.junit.jupiter.api.extension.ExtendWith
 import java.time.Duration
 import java.util.*
+import java.util.concurrent.TimeUnit
 
-class AwsLambdaSchedulerTest : TestBase() {
-    private val repository = AwsLambdaRepository()
-    val lambdaFunctionHandler = LambdaFunctionHandler(lambdaClient)
+@ExtendWith(MockKExtension::class)
+class AwsLambdaSchedulerTest {
 
-    fun configureScheduler(): AwsLambdaScheduler {
-        val executor = AwsLambdaExecutor(lambdaClient, repository, lambdaFunctionHandler)
-        return AwsLambdaScheduler(repository, executor, lambdaFunctionHandler)
+    @MockK(relaxed = true)
+    lateinit var executor: TaskExecutor
+
+    @MockK(relaxed = true)
+    lateinit var handler: LambdaFunctionHandler
+
+    lateinit var scheduler: AwsLambdaScheduler
+
+    val repository: TaskRepository = TaskRepository()
+
+    @BeforeEach
+    fun setUp() {
+        scheduler = AwsLambdaScheduler(repository, executor, handler)
     }
 
     @AfterEach
-    fun cleanup() {
-        repository.list().forEach { lambdaFunctionHandler.remove(it.name) }
+    fun tearDown() {
+        scheduler.close()
     }
 
     @Test
-    fun creates_and_schedules_lambda_function_task() {
-        val scheduler = configureScheduler()
+    fun executesTaskOnlyOnceWhenTotalRunsIsOne() {
         val name = UUID.randomUUID().toString()
-        val task = CreateAndScheduleLambdaFunctionTask(
-            jsonPayload = "{\"firstKey\": \"firstValue\"}",
-            initialDelay = Duration.ZERO,
-            repeatEvery = null,
-            repetitions = 0,
-            awsLambda = AwsLambda(
-                name,
-                Runtime.NODEJS20_X,
-                packageType = PackageType.ZIP,
-                packageFileBase64 = getLambdaCode(),
-            )
-        )
-        scheduler.schedule(task)
-        var completedTask: SchedulerTask? = null
-        await.timeout(Duration.ofSeconds(1)).until {
-            completedTask = repository.findByName(name).firstOrNull { it.status == LambdaStatus.COMPLETED }
-            completedTask != null
-        }
-        assertThat(completedTask?.result).isNotNull
-        completedTask?.result?.contains("firstValue")
-        completedTask?.result?.contains("firstKey")
-    }
-
-    @Test
-    fun schedules_existing_lambda_function_task() {
-        val scheduler = configureScheduler()
-        val name = UUID.randomUUID().toString()
-        val awsLambda = AwsLambda(
-            name,
-            Runtime.NODEJS20_X,
-            packageType = PackageType.ZIP,
-            packageFileBase64 = getLambdaCode(),
-        )
-        lambdaFunctionHandler.create(awsLambda)
         val task = ScheduleLambdaFunctionTask(
             name = name,
-            jsonPayload = "{\"firstKey\": \"firstValue\"}",
+            jsonPayload = "",
             initialDelay = Duration.ZERO,
-            repetitions = 0,
+            repeatEvery = null,
+            totalRunsNumber = 1,
+        )
+
+        scheduler.schedule(task)
+        await.timeout(1, TimeUnit.SECONDS).untilAsserted {
+            verify(exactly = 1) { executor.execute(match { it.name == name }) }
+        }
+
+    }
+
+    @Test
+    fun executesTaskExactlyTwiceWhenTotalRunsIsTwo() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = Duration.ofMillis(1),
+            totalRunsNumber = 2,
+        )
+
+        scheduler.schedule(task)
+        await.timeout(1, TimeUnit.SECONDS).untilAsserted {
+            verify(exactly = 2) { executor.execute(match { it.name == name }) }
+        }
+    }
+
+    @Test
+    fun executesTaskAtLeastTwiceWhenTotalRunsIsNegative() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = Duration.ofMillis(1),
+            totalRunsNumber = -1,
+        )
+
+        scheduler.schedule(task)
+        await.timeout(1, TimeUnit.SECONDS).untilAsserted {
+            verify(atLeast = 2) { executor.execute(match { it.name == name }) }
+        }
+    }
+
+    @Test
+    fun doesNotRepeatExecutionsWhenRepeatIntervalIsNotSet() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = null,
+            totalRunsNumber = 2,
+        )
+
+        scheduler.schedule(task)
+        await.timeout(1, TimeUnit.SECONDS).untilAsserted {
+            verify(exactly = 1) { executor.execute(match { it.name == name }) }
+        }
+
+    }
+
+    @Test
+    fun doesNotExecuteTasksWhenClosed() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = null,
+            totalRunsNumber = 2,
+        )
+        scheduler.close()
+        scheduler.schedule(task)
+        await.timeout(1, TimeUnit.SECONDS).untilAsserted {
+            assertThat(repository.findByName(name).singleOrNull()).isNotNull
+            verify(exactly = 0) { executor.execute(any()) }
+        }
+    }
+
+    @Test
+    fun doesNotExecuteTasksWhenRequestedRunsIsZero() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = null,
+            totalRunsNumber = 0,
         )
         scheduler.schedule(task)
-        var completedTask: SchedulerTask? = null
-        await.timeout(Duration.ofSeconds(1)).until {
-            completedTask = repository.findByName(name).firstOrNull { it.status == LambdaStatus.COMPLETED }
-            completedTask != null
+        await.timeout(1, TimeUnit.SECONDS)
+        verify(exactly = 0) { executor.execute(any()) }
+    }
+
+    @Test
+    fun repeatsExecutionsNeverExceedingRepeatInterval() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = Duration.ofSeconds(1),
+            totalRunsNumber = 2,
+        )
+        scheduler.schedule(task)
+        await.timeout(2, TimeUnit.SECONDS).untilAsserted {
+            verify(exactly = 2) { executor.execute(match { it.name == name }) }
         }
-        assertThat(completedTask?.result).isNotNull
-        completedTask?.result?.contains("firstValue")
-        completedTask?.result?.contains("firstKey")
     }
 
     @Test
-    fun single_task_is_executed_once() {
-
+    fun repeatsExecutionsNotMoreFrequentThanRepeatInterval() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = Duration.ofSeconds(1),
+            totalRunsNumber = 2,
+        )
+        scheduler.schedule(task)
+        await.timeout(900, TimeUnit.MILLISECONDS)
+        verify(exactly = 1) { executor.execute(match { it.name == name }) }
     }
 
     @Test
-    fun recurring_task_with_finite_repetitions_executes_expected_times() {
-
-
-    }
-
-    @Test
-    fun recurring_task_with_infinite_repetitions_executes_multiple_times() {
-
-
+    fun executesTaskNoEarlierThanInitialDelay() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ofSeconds(1),
+            repeatEvery = null,
+            totalRunsNumber = 1,
+        )
+        scheduler.schedule(task)
+        await.timeout(900, TimeUnit.MILLISECONDS)
+        verify(exactly = 0) { executor.execute(match { it.name == name }) }
     }
 }

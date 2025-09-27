@@ -38,7 +38,7 @@ class LambdaFunctionHandler(
             .handler(awsLambda.handler)
             .role(role)
             .packageType(awsLambda.packageType)
-            .architectures(Architecture.X86_64)
+            .architectures(Architecture.ARM64)
             .code { it.zipFile(SdkBytes.fromByteArray(Base64.decode(awsLambda.packageFileBase64))) }
             .build()
 
@@ -52,13 +52,23 @@ class LambdaFunctionHandler(
         lambdaClient.deleteFunction(request)
     }
 
-    private fun waitForLambdaActivation(name: String) {
+    fun get(name: String): FunctionConfiguration? {
         val request = GetFunctionRequest.builder().functionName(name).build()
-        val waitTimeMilliseconds = 30000L
+        val response = try {
+            lambdaClient.getFunction(request)
+        } catch (_: ResourceNotFoundException) {
+            return null
+        }
+        if (response.sdkHttpResponse().isSuccessful) return response.configuration()
+        return null
+    }
+
+    private fun waitForLambdaActivation(name: String) {
+        val waitTimeMilliseconds = 60000L
         val waitUntilTime = Instant.now().plusMillis(waitTimeMilliseconds)
         while (Instant.now().isBefore(waitUntilTime)) {
-            val response = lambdaClient.getFunction(request)
-            if (response.configuration().state() == State.ACTIVE) return
+            val function = get(name)
+            if (function != null && function.state() == State.ACTIVE) return
             Thread.sleep(100)
         }
         throw IllegalStateException("Function $name never became active")
