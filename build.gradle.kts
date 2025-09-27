@@ -1,10 +1,12 @@
 plugins {
     kotlin("jvm") version "2.2.0"
     `maven-publish`
+    signing
 }
 
-group = "org.projects"
-version = "1.0.0"
+// Coordinates are typically provided via gradle.properties for CI/CD
+group = (findProperty("GROUP") as String?) ?: "org.projects"
+version = (findProperty("VERSION_NAME") as String?) ?: "1.0.0"
 
 description = "Kotlin library for scheduling and executing AWS Lambda jobs with one-time and recurrent schedules."
 
@@ -36,30 +38,56 @@ publishing {
     publications {
         create<MavenPublication>("mavenJava") {
             from(components["java"])
+            artifactId = (findProperty("POM_ARTIFACT_ID") as String?) ?: project.name
             pom {
-                name.set(project.name)
+                name.set((findProperty("POM_NAME") as String?) ?: project.name)
                 description.set(project.description)
-                url.set("https://example.org/${project.name}")
+                url.set((findProperty("POM_URL") as String?) ?: "https://github.com/org-projects/scheduler")
                 licenses {
                     license {
-                        name.set("The Apache License, Version 2.0")
-                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        name.set((findProperty("POM_LICENSE_NAME") as String?) ?: "The Apache License, Version 2.0")
+                        url.set((findProperty("POM_LICENSE_URL") as String?) ?: "https://www.apache.org/licenses/LICENSE-2.0.txt")
                     }
                 }
                 developers {
                     developer {
-                        id.set("org-projects")
-                        name.set("Org Projects")
-                        email.set("dev@example.org")
+                        id.set((findProperty("POM_DEVELOPER_ID") as String?) ?: "org-projects")
+                        name.set((findProperty("POM_DEVELOPER_NAME") as String?) ?: "Org Projects")
+                        email.set((findProperty("POM_DEVELOPER_EMAIL") as String?) ?: "dev@example.org")
                     }
                 }
                 scm {
-                    connection.set("scm:git:git://example.org/${project.name}.git")
-                    developerConnection.set("scm:git:ssh://example.org/${project.name}.git")
-                    url.set("https://example.org/${project.name}")
+                    connection.set((findProperty("POM_SCM_CONNECTION") as String?) ?: "scm:git:https://github.com/org-projects/scheduler.git")
+                    developerConnection.set((findProperty("POM_SCM_DEV_CONNECTION") as String?) ?: "scm:git:ssh://git@github.com:org-projects/scheduler.git")
+                    url.set((findProperty("POM_SCM_URL") as String?) ?: "https://github.com/org-projects/scheduler")
                 }
             }
         }
+    }
+    repositories {
+        maven {
+            name = "OSSRH"
+            val releasesRepoUrl = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+            val snapshotsRepoUrl = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+            url = if ((version as String).endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+            credentials {
+                username = findProperty("OSSRH_USERNAME") as String?
+                password = findProperty("OSSRH_PASSWORD") as String?
+            }
+        }
+    }
+}
+
+signing {
+    // Only sign if signing key is provided (CI). For local builds, this is skipped.
+    val inMemoryKey = (findProperty("SIGNING_KEY") as String?)?.trim()
+    val hasKey = !inMemoryKey.isNullOrBlank() || project.hasProperty("signing.keyId")
+    if (hasKey) {
+        val inMemoryPass = (findProperty("SIGNING_PASSWORD") as String?)?.trim()
+        if (!inMemoryKey.isNullOrBlank()) {
+            useInMemoryPgpKeys(inMemoryKey, inMemoryPass)
+        }
+        sign(publishing.publications["mavenJava"])
     }
 }
 
