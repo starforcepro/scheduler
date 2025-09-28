@@ -9,11 +9,11 @@ import java.util.*
 
 class TaskRepositoryTest {
 
-    private lateinit var repository: TaskRepository
+    private lateinit var repository: TaskRepositoryInMemory
 
     @BeforeEach
     fun setUp() {
-        repository = TaskRepository()
+        repository = TaskRepositoryInMemory()
     }
 
     @AfterEach

@@ -23,7 +23,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("org.assertj:assertj-core:3.26.3")
     testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
-    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("io.mockk:mockk:1.14.5")
 }
 
 java {
@@ -93,5 +93,5 @@ signing {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(24)
 }

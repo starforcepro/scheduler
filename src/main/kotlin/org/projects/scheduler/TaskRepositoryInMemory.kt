@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 private const val POLLING_DELAY = 100L
 
-class TaskRepository : AutoCloseable {
+class TaskRepositoryInMemory : AutoCloseable, TaskRepository {
     private val executionQueue = DelayQueue<SchedulerTask>()
     private val idToTaskMap = ConcurrentHashMap<UUID, SchedulerTask>()
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
@@ -26,28 +26,28 @@ class TaskRepository : AutoCloseable {
         }
     }
 
-    fun add(task: SchedulerTask) {
+    override fun add(task: SchedulerTask) {
         executionQueue.offer(task)
         idToTaskMap[task.id] = task
     }
 
-    fun next(): SchedulerTask? {
+    override fun next(): SchedulerTask? {
         return executionQueue.poll(POLLING_DELAY, TimeUnit.MILLISECONDS)
     }
 
-    fun update(task: SchedulerTask) {
+    override fun update(task: SchedulerTask) {
         idToTaskMap[task.id] = task
     }
 
-    fun find(id: UUID): SchedulerTask? {
+    override fun find(id: UUID): SchedulerTask? {
         return idToTaskMap[id]
     }
 
-    fun list(): List<SchedulerTask> {
+    override fun list(): List<SchedulerTask> {
         return idToTaskMap.values.toList()
     }
 
-    fun findByName(name: String): List<SchedulerTask> {
+    override fun findByName(name: String): List<SchedulerTask> {
         return idToTaskMap.values.filter { it.name == name }
     }
 
@@ -55,4 +55,13 @@ class TaskRepository : AutoCloseable {
         scheduler.shutdownNow()
         scheduler.awaitTermination(1, TimeUnit.SECONDS)
     }
+}
+
+interface TaskRepository {
+    fun add(task: SchedulerTask)
+    fun next(): SchedulerTask?
+    fun update(task: SchedulerTask)
+    fun find(id: UUID): SchedulerTask?
+    fun list(): List<SchedulerTask>
+    fun findByName(name: String): List<SchedulerTask>
 }

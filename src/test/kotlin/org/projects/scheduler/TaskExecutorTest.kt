@@ -3,7 +3,6 @@ package org.projects.scheduler
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.junit5.MockKExtension
-import io.mockk.spyk
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -11,7 +10,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.time.LocalDateTime
 import java.util.*
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 @ExtendWith(MockKExtension::class)
@@ -20,15 +18,13 @@ class TaskExecutorTest {
     @MockK(relaxed = true)
     private lateinit var handler: LambdaFunctionHandler
 
-    private lateinit var repository: TaskRepository
+    private val repository = TaskRepositoryInMemory()
+
     private lateinit var executor: TaskExecutor
 
     @BeforeEach
     fun setUp() {
-        repository = spyk(TaskRepository())
-        // Use a single-thread executor to avoid dependence on virtual threads
-        val threadPool = Executors.newSingleThreadExecutor()
-        executor = TaskExecutor(repository, handler, threadPool)
+        executor = TaskExecutor(repository, handler)
     }
 
     @AfterEach

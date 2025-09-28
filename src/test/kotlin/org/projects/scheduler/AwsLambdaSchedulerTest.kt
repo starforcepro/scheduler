@@ -24,7 +24,7 @@ class AwsLambdaSchedulerTest {
 
     lateinit var scheduler: AwsLambdaScheduler
 
-    val repository: TaskRepository = TaskRepository()
+    val repository: TaskRepositoryInMemory = TaskRepositoryInMemory()
 
     @BeforeEach
     fun setUp() {
@@ -48,6 +48,7 @@ class AwsLambdaSchedulerTest {
         )
 
         scheduler.schedule(task)
+
         await.timeout(1, TimeUnit.SECONDS).untilAsserted {
             verify(exactly = 1) { executor.execute(match { it.name == name }) }
         }

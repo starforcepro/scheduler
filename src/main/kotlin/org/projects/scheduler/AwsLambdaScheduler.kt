@@ -9,7 +9,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class AwsLambdaScheduler(
-    val taskRepository: TaskRepository,
+    val taskRepository: TaskRepositoryInMemory,
     val taskExecutor: TaskExecutor,
     val lambdaFunctionHandler: LambdaFunctionHandler
 ) : AutoCloseable {

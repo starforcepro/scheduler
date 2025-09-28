@@ -10,8 +10,8 @@ import java.time.Duration
 import java.util.*
 
 class AwsLambdaSchedulerIntegrationTest : TestBase() {
-    private val repository = TaskRepository()
-    val lambdaFunctionHandler = LambdaFunctionHandler(lambdaClient)
+    private val repository = TaskRepositoryInMemory()
+    private val lambdaFunctionHandler = LambdaFunctionHandler(lambdaClient)
 
     fun configureScheduler(): AwsLambdaScheduler {
         val executor = TaskExecutor(repository, lambdaFunctionHandler)
@@ -31,7 +31,7 @@ class AwsLambdaSchedulerIntegrationTest : TestBase() {
             jsonPayload = "{\"firstKey\": \"firstValue\"}",
             initialDelay = Duration.ZERO,
             repeatEvery = null,
-            totalRunsNumber = 0,
+            totalRunsNumber = 1,
             awsLambda = AwsLambda(
                 name,
                 Runtime.NODEJS20_X,
@@ -41,7 +41,7 @@ class AwsLambdaSchedulerIntegrationTest : TestBase() {
         )
         scheduler.schedule(task)
         var completedTask: SchedulerTask? = null
-        await.timeout(Duration.ofSeconds(1)).until {
+        await.timeout(Duration.ofSeconds(5)).until {
             completedTask = repository.findByName(name).firstOrNull { it.status == LambdaStatus.COMPLETED }
             completedTask != null
         }
@@ -65,11 +65,11 @@ class AwsLambdaSchedulerIntegrationTest : TestBase() {
             name = name,
             jsonPayload = "{\"firstKey\": \"firstValue\"}",
             initialDelay = Duration.ZERO,
-            totalRunsNumber = 0,
+            totalRunsNumber = 1,
         )
         scheduler.schedule(task)
         var completedTask: SchedulerTask? = null
-        await.timeout(Duration.ofSeconds(1)).until {
+        await.timeout(Duration.ofSeconds(5)).until {
             completedTask = repository.findByName(name).firstOrNull { it.status == LambdaStatus.COMPLETED }
             completedTask != null
         }

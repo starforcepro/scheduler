@@ -6,7 +6,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class TaskExecutor(
-    val taskRepository: TaskRepository,
+    val taskRepository: TaskRepositoryInMemory,
     val lambdaFunctionHandler: LambdaFunctionHandler,
     val executor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 ) : AutoCloseable {
