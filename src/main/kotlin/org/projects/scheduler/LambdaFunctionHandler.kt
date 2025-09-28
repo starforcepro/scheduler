@@ -14,22 +14,17 @@ class LambdaFunctionHandler(
             .functionName(task.name)
             .payload(SdkBytes.fromUtf8String(task.jsonPayload))
             .build()
-        val response = try {
-            lambdaClient.invoke(invokeRequest)
-        } catch (e: Exception) {
-            return InvokeResult(
-                result = "Failed to invoke function",
-                status = LambdaStatus.FAILED,
-                error = e.message ?: e.javaClass.simpleName
-            )
-        }
+
+        val result = lambdaClient.invoke(invokeRequest)
+
         return InvokeResult(
-            result = response.payload().asUtf8String(),
-            status = if (response.functionError() == null) LambdaStatus.COMPLETED else LambdaStatus.FAILED
+            result = result.payload().asUtf8String(),
+            error = result.functionError(),
         )
     }
 
     fun create(awsLambda: AwsLambda) {
+        if (get(awsLambda.name) != null) throw IllegalArgumentException("Function already exists")
         val role = System.getenv("AWS_LAMBDA_ROLE_ARN")
             ?: throw IllegalArgumentException("AWS_LAMBDA_ROLE_ARN not set")
         val createRequest = CreateFunctionRequest.builder()
@@ -77,6 +72,5 @@ class LambdaFunctionHandler(
 
 data class InvokeResult(
     val result: String,
-    val status: LambdaStatus,
     val error: String? = null
 )

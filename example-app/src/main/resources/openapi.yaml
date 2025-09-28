@@ -1,0 +1,137 @@
+openapi: 3.0.3
+info:
+  title: Example Scheduler Service API
+  version: "1.0.0"
+  description: |
+    OpenAPI specification for the example Spring Boot service that schedules AWS Lambda tasks.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /schedule:
+    post:
+      summary: Schedule a new AWS Lambda task
+      operationId: scheduleTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleRequest'
+      responses:
+        "202":
+          description: Task accepted for scheduling
+        "200":
+          description: Task accepted for scheduling
+        "400":
+          description: Invalid request
+  /list:
+    get:
+      summary: List all scheduled tasks
+      operationId: listTasks
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SchedulerTask'
+  /{name}:
+    get:
+      summary: Find tasks by name
+      operationId: getTasksByName
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SchedulerTask'
+  /status/{name}:
+    get:
+      summary: Get latest status by task name
+      operationId: getStatusByName
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Latest task or null if none exists
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SchedulerTask'
+                  - type: 'null'
+  /cancel/{name}:
+    post:
+      summary: Cancel scheduled tasks by name
+      operationId: cancelByName
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Cancellation requested
+        "200":
+          description: Cancellation requested
+components:
+  schemas:
+    ScheduleRequest:
+      type: object
+      required: [name, jsonPayload]
+      properties:
+        name:
+          type: string
+          description: Logical name of the task and corresponding AWS Lambda function
+          example: sample-task
+        jsonPayload:
+          type: string
+          description: Raw JSON string passed to the Lambda function
+          example: '{"hello":"world"}'
+    SchedulerTask:
+      type: object
+      required: [id, name, status, scheduledAt, jsonPayload]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/LambdaStatus'
+        scheduledAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        executedAt:
+          type: string
+          format: date-time
+          nullable: true
+        jsonPayload:
+          type: string
+        result:
+          type: string
+          nullable: true
+    LambdaStatus:
+      type: string
+      enum: [SCHEDULED, RUNNING, COMPLETED, FAILED]

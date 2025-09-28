@@ -13,6 +13,7 @@ private const val POLLING_DELAY = 100L
 class TaskRepositoryInMemory : AutoCloseable, TaskRepository {
     private val executionQueue = DelayQueue<SchedulerTask>()
     private val idToTaskMap = ConcurrentHashMap<UUID, SchedulerTask>()
+    private val nameToTaskDescriptionMap = ConcurrentHashMap<String, SchedulerTaskDescription>()
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 
     init {
@@ -26,8 +27,9 @@ class TaskRepositoryInMemory : AutoCloseable, TaskRepository {
         }
     }
 
-    override fun add(task: SchedulerTask) {
+    override fun upsert(task: SchedulerTask, schedulerTaskDescription: SchedulerTaskDescription) {
         executionQueue.offer(task)
+        nameToTaskDescriptionMap[task.name] = schedulerTaskDescription
         idToTaskMap[task.id] = task
     }
 
@@ -35,12 +37,17 @@ class TaskRepositoryInMemory : AutoCloseable, TaskRepository {
         return executionQueue.poll(POLLING_DELAY, TimeUnit.MILLISECONDS)
     }
 
-    override fun update(task: SchedulerTask) {
+    override fun update(task: SchedulerTask): SchedulerTask {
         idToTaskMap[task.id] = task
+        return task
     }
 
     override fun find(id: UUID): SchedulerTask? {
         return idToTaskMap[id]
+    }
+
+    override fun findDescription(name: String): SchedulerTaskDescription {
+        return nameToTaskDescriptionMap[name]!!
     }
 
     override fun list(): List<SchedulerTask> {
@@ -51,17 +58,24 @@ class TaskRepositoryInMemory : AutoCloseable, TaskRepository {
         return idToTaskMap.values.filter { it.name == name }
     }
 
+    override fun cancel(name: String) {
+        val description = nameToTaskDescriptionMap[name]?: return
+        nameToTaskDescriptionMap[name] = description.copy(cancelled = true)
+    }
+
     override fun close() {
         scheduler.shutdownNow()
         scheduler.awaitTermination(1, TimeUnit.SECONDS)
     }
 }
 
-interface TaskRepository {
-    fun add(task: SchedulerTask)
+interface TaskRepository : AutoCloseable {
+    fun upsert(task: SchedulerTask, schedulerTaskDescription: SchedulerTaskDescription)
     fun next(): SchedulerTask?
-    fun update(task: SchedulerTask)
+    fun update(task: SchedulerTask): SchedulerTask
     fun find(id: UUID): SchedulerTask?
     fun list(): List<SchedulerTask>
     fun findByName(name: String): List<SchedulerTask>
+    fun findDescription(name: String): SchedulerTaskDescription
+    fun cancel(name: String)
 }

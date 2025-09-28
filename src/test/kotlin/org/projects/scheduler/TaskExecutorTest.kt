@@ -4,8 +4,6 @@ import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.junit5.MockKExtension
 import org.awaitility.kotlin.await
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.time.LocalDateTime
@@ -20,18 +18,6 @@ class TaskExecutorTest {
 
     private val repository = TaskRepositoryInMemory()
 
-    private lateinit var executor: TaskExecutor
-
-    @BeforeEach
-    fun setUp() {
-        executor = TaskExecutor(repository, handler)
-    }
-
-    @AfterEach
-    fun tearDown() {
-        executor.close()
-    }
-
     @Test
     fun updatesTaskWithInvokeResultAfterExecution() {
         val task = SchedulerTask(
@@ -40,15 +26,38 @@ class TaskExecutorTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now(),
-            totalRunsNumber = 1,
         )
         val resultText = "result"
-        every { handler.invoke(task) } returns InvokeResult(resultText, LambdaStatus.COMPLETED)
+        every { handler.invoke(task) } returns InvokeResult(resultText)
+        val executor = TaskExecutor(repository, handler)
+
         executor.execute(task)
 
         await.timeout(1, TimeUnit.SECONDS).untilAsserted {
             repository.findByName(task.name).singleOrNull {
                 it.status == LambdaStatus.COMPLETED && it.result == resultText
+            }
+        }
+    }
+
+    @Test
+    fun updatesTaskWithFailureWhenInvokeThrowsException() {
+        val task = SchedulerTask(
+            id = UUID.randomUUID(),
+            name = UUID.randomUUID().toString(),
+            jsonPayload = "",
+            status = LambdaStatus.SCHEDULED,
+            scheduledAt = LocalDateTime.now(),
+        )
+        val errorMessage = "error message"
+        every { handler.invoke(any()) } throws Exception(errorMessage)
+        val executor = TaskExecutor(repository, handler)
+
+        executor.execute(task)
+
+        await.timeout(1, TimeUnit.SECONDS).untilAsserted {
+            repository.findByName(task.name).singleOrNull {
+                it.status == LambdaStatus.FAILED && it.result == "Failed to invoke function : $errorMessage"
             }
         }
     }

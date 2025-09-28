@@ -3,6 +3,7 @@ package com.example.demo
 import org.projects.scheduler.AwsLambdaScheduler
 import org.projects.scheduler.LambdaFunctionHandler
 import org.projects.scheduler.TaskExecutor
+import org.projects.scheduler.TaskRepository
 import org.projects.scheduler.TaskRepositoryInMemory
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
@@ -31,7 +32,7 @@ class SampleAppApplication {
 
     @Bean
     fun scheduler(
-        taskRepository: TaskRepositoryInMemory,
+        taskRepository: TaskRepository,
         taskExecutor: TaskExecutor,
         lambdaFunctionHandler: LambdaFunctionHandler
     ): AwsLambdaScheduler {
@@ -55,7 +56,6 @@ class AwsLambdaConfig {
     fun lambdaClient(awsCredentialsProvider: AwsCredentialsProvider?): LambdaClient? {
         return LambdaClient.builder()
             .credentialsProvider(awsCredentialsProvider)
-            .region(Region.EU_NORTH_1)
             .build()
     }
 }

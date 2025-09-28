@@ -29,7 +29,6 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now(),
-            totalRunsNumber = 1,
         )
         val earliest = SchedulerTask(
             id = UUID.randomUUID(),
@@ -37,11 +36,10 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now().minusMinutes(1),
-            totalRunsNumber = 1,
         )
 
-        repository.add(latest)
-        repository.add(earliest)
+        repository.upsert(latest, schedulerTaskDescription(latest.name))
+        repository.upsert(earliest, schedulerTaskDescription(earliest.name))
 
         val first = repository.next()
         val second = repository.next()
@@ -57,10 +55,9 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now().plusMinutes(1),
-            totalRunsNumber = 1,
         )
 
-        repository.add(futureTask)
+        repository.upsert(futureTask, schedulerTaskDescription(futureTask.name))
 
         val task = repository.next()
         assertThat(task).isNull()
@@ -76,9 +73,8 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now().minusSeconds(1),
-            totalRunsNumber = 1,
         )
-        repository.add(originalTask)
+        repository.upsert(originalTask, schedulerTaskDescription(originalTask.name))
 
         repository.update(
             originalTask.copy(
@@ -102,10 +98,9 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now(),
-            totalRunsNumber = 1,
         )
 
-        repository.add(task)
+        repository.upsert(task, schedulerTaskDescription(task.name))
 
         val storedTask = repository.find(task.id)
         assertThat(storedTask).isEqualTo(task)
@@ -119,7 +114,6 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now(),
-            totalRunsNumber = 1,
         )
         val second = SchedulerTask(
             id = UUID.randomUUID(),
@@ -127,11 +121,10 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now(),
-            totalRunsNumber = 1,
         )
 
-        repository.add(first)
-        repository.add(second)
+        repository.upsert(first, schedulerTaskDescription(first.name))
+        repository.upsert(second, schedulerTaskDescription(second.name))
 
         val all = repository.list()
         assertThat(all).containsExactlyInAnyOrder(first, second)
@@ -146,7 +139,6 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now(),
-            totalRunsNumber = 1,
         )
         val namedOtherWay = SchedulerTask(
             id = UUID.randomUUID(),
@@ -154,14 +146,18 @@ class TaskRepositoryTest {
             jsonPayload = "",
             status = LambdaStatus.SCHEDULED,
             scheduledAt = LocalDateTime.now(),
-            totalRunsNumber = 1,
         )
 
-        repository.add(namedOneWay)
-        repository.add(namedOtherWay)
+        repository.upsert(namedOneWay, schedulerTaskDescription(namedOneWay.name))
+        repository.upsert(namedOtherWay, schedulerTaskDescription(namedOtherWay.name))
 
         val result = repository.findByName(name)
         assertThat(result.size).isEqualTo(1)
         assertThat(repository.list()).containsExactlyInAnyOrder(namedOneWay, namedOtherWay)
     }
+
+    private fun schedulerTaskDescription(name: String) = SchedulerTaskDescription(
+        name = name,
+        runsLeft = 1,
+    )
 }

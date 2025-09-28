@@ -185,4 +185,27 @@ class AwsLambdaSchedulerTest {
         await.timeout(900, TimeUnit.MILLISECONDS)
         verify(exactly = 0) { executor.execute(match { it.name == name }) }
     }
+
+    @Test
+    fun stopsExecutionsAfterCancellation() {
+        val name = UUID.randomUUID().toString()
+        val task = ScheduleLambdaFunctionTask(
+            name = name,
+            jsonPayload = "",
+            initialDelay = Duration.ZERO,
+            repeatEvery = Duration.ofMillis(200),
+            totalRunsNumber = -1,
+        )
+
+        scheduler.schedule(task)
+
+        await.timeout(1, TimeUnit.SECONDS).untilAsserted {
+            verify(exactly = 1) { executor.execute(match { it.name == name }) }
+        }
+
+        scheduler.cancel(name)
+
+        await.timeout(1, TimeUnit.SECONDS)
+        verify(exactly = 1) { executor.execute(match { it.name == name }) }
+    }
 }
